@@ -9,3 +9,30 @@ export interface User {
 }
 
 export const DEMO_DISCLAIMER = 'Synthetic data only — not HIPAA-compliant.';
+
+export interface ActivityItem {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  summary: string;
+  actor: string;
+  createdAt: string;
+}
+
+export interface DashboardSummary {
+  generatedAt: string;
+  patients: {
+    total: number;
+    byRisk: Record<string, number>;
+    byStatus: Record<string, number>;
+  };
+  tasks: {
+    total: number;
+    byStatus: Record<string, number>;
+    byPriority: Record<string, number>;
+    overdue: number;
+    unassigned: number;
+  };
+  recentActivity: ActivityItem[];
+}
