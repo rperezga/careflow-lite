@@ -46,4 +46,14 @@ careTaskSchema.pre('save', function (next) {
   next();
 });
 
+// Expose a clean `id` and drop Mongo internals (_id, __v) from API JSON.
+careTaskSchema.set('toJSON', {
+  virtuals: true,
+  versionKey: false,
+  transform(_doc, ret) {
+    const { _id, ...rest } = ret;
+    return rest;
+  },
+});
+
 export const CareTask = model('CareTask', careTaskSchema);
