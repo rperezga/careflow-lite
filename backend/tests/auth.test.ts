@@ -1,21 +1,14 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
-import { connectDb, disconnectDb } from '../src/db/mongoose';
 import { User } from '../src/models/User';
 import { hashPassword } from '../src/services/auth.service';
+import { setupTestDb, teardownTestDb } from './helpers/testDb';
 
-let mongo: MongoMemoryServer | undefined;
 const app = createApp();
 
 beforeAll(async () => {
-  let uri = process.env.MONGO_TEST_URI;
-  if (!uri) {
-    mongo = await MongoMemoryServer.create();
-    uri = mongo.getUri();
-  }
-  await connectDb(uri);
+  await setupTestDb();
   await User.init();
   await User.create({
     name: 'Admin',
@@ -26,8 +19,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await disconnectDb();
-  if (mongo) await mongo.stop();
+  await teardownTestDb();
 });
 
 describe('POST /api/auth/login', () => {

@@ -3,6 +3,7 @@ import express from 'express';
 import { errorHandler } from './middleware/errorHandler';
 import { authRouter } from './routes/auth.routes';
 import { healthRouter } from './routes/health.routes';
+import { usersRouter } from './routes/users.routes';
 
 // Build the Express app without listening, so tests can import it directly.
 export function createApp() {
@@ -11,6 +12,7 @@ export function createApp() {
   app.use(cookieParser());
   app.use('/health', healthRouter);
   app.use('/api/auth', authRouter);
+  app.use('/api/users', usersRouter);
   app.use(errorHandler);
   return app;
 }

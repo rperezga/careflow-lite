@@ -32,3 +32,5 @@ const auditEventSchema = new Schema(
 );
 
 export const AuditEvent = model('AuditEvent', auditEventSchema);
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];

@@ -1,21 +1,11 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { connectDb, disconnectDb } from '../src/db/mongoose';
 import { CareTask } from '../src/models/CareTask';
 import { Patient } from '../src/models/Patient';
 import { User } from '../src/models/User';
-
-let mongo: MongoMemoryServer | undefined;
+import { setupTestDb, teardownTestDb } from './helpers/testDb';
 
 beforeAll(async () => {
-  // CI provides a MongoDB service container; locally we fall back to an in-memory server.
-  let uri = process.env.MONGO_TEST_URI;
-  if (!uri) {
-    mongo = await MongoMemoryServer.create();
-    uri = mongo.getUri();
-  }
-  await connectDb(uri);
-  // Ensure unique indexes are built before testing uniqueness constraints.
+  await setupTestDb();
   await Promise.all([User.init(), Patient.init(), CareTask.init()]);
 });
 
@@ -24,8 +14,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await disconnectDb();
-  if (mongo) await mongo.stop();
+  await teardownTestDb();
 });
 
 describe('User model', () => {
