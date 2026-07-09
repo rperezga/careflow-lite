@@ -15,6 +15,11 @@ async function loginAs(email: string, password: string) {
   return agent;
 }
 
+type Agent = Awaited<ReturnType<typeof loginAs>>;
+let adminAgent!: Agent;
+let staffAgent!: Agent;
+let viewerAgent!: Agent;
+
 async function seedPatient(overrides: Record<string, unknown> = {}) {
   return Patient.create({
     firstName: 'Ana',
@@ -30,16 +35,23 @@ beforeAll(async () => {
   await setupTestDb();
   await User.init();
   await Patient.init();
-});
-
-beforeEach(async () => {
-  await Promise.all([User.deleteMany({}), Patient.deleteMany({}), AuditEvent.deleteMany({})]);
+  // Create the users once and keep them for the whole file so their ids stay
+  // stable and the JWT cookies stay valid. We also log in only three times
+  // total, well under the login rate limit (10 per window).
   const passwordHash = await hashPassword('secret123');
   await User.create([
     { name: 'Admin', email: 'admin@example.com', passwordHash, role: 'admin' },
     { name: 'Staff', email: 'staff@example.com', passwordHash, role: 'staff' },
     { name: 'Viewer', email: 'viewer@example.com', passwordHash, role: 'viewer' },
   ]);
+  adminAgent = await loginAs('admin@example.com', 'secret123');
+  staffAgent = await loginAs('staff@example.com', 'secret123');
+  viewerAgent = await loginAs('viewer@example.com', 'secret123');
+});
+
+// Reset only patients and audit between tests; users and sessions persist.
+beforeEach(async () => {
+  await Promise.all([Patient.deleteMany({}), AuditEvent.deleteMany({})]);
 });
 
 afterAll(async () => {
@@ -54,8 +66,7 @@ describe('patients API', () => {
 
   it('lets any authenticated role list patients (and hides _id)', async () => {
     await seedPatient();
-    const agent = await loginAs('viewer@example.com', 'secret123');
-    const res = await agent.get('/api/patients');
+    const res = await viewerAgent.get('/api/patients');
     expect(res.status).toBe(200);
     expect(res.body.patients).toHaveLength(1);
     expect(res.body.total).toBe(1);
@@ -65,16 +76,14 @@ describe('patients API', () => {
   });
 
   it('forbids viewers from creating patients', async () => {
-    const agent = await loginAs('viewer@example.com', 'secret123');
-    const res = await agent
+    const res = await viewerAgent
       .post('/api/patients')
       .send({ firstName: 'New', lastName: 'Patient', memberId: 'DEMO-90001' });
     expect(res.status).toBe(403);
   });
 
   it('lets staff create a patient and records an audit event', async () => {
-    const agent = await loginAs('staff@example.com', 'secret123');
-    const res = await agent
+    const res = await staffAgent
       .post('/api/patients')
       .send({ firstName: 'Luis', lastName: 'Perez', memberId: 'DEMO-90002', riskLevel: 'high' });
     expect(res.status).toBe(201);
@@ -86,16 +95,14 @@ describe('patients API', () => {
 
   it('rejects a duplicate memberId with 409', async () => {
     await seedPatient({ memberId: 'DEMO-90003' });
-    const agent = await loginAs('staff@example.com', 'secret123');
-    const res = await agent
+    const res = await staffAgent
       .post('/api/patients')
       .send({ firstName: 'Dup', lastName: 'Licate', memberId: 'DEMO-90003' });
     expect(res.status).toBe(409);
   });
 
   it('validates input with 400', async () => {
-    const agent = await loginAs('staff@example.com', 'secret123');
-    const res = await agent.post('/api/patients').send({ firstName: '', lastName: '' });
+    const res = await staffAgent.post('/api/patients').send({ firstName: '', lastName: '' });
     expect(res.status).toBe(400);
   });
 
@@ -112,21 +119,19 @@ describe('patients API', () => {
       memberId: 'DEMO-90011',
       riskLevel: 'low',
     });
-    const agent = await loginAs('admin@example.com', 'secret123');
 
-    const byRisk = await agent.get('/api/patients?riskLevel=high');
+    const byRisk = await adminAgent.get('/api/patients?riskLevel=high');
     expect(byRisk.body.patients).toHaveLength(1);
     expect(byRisk.body.patients[0].firstName).toBe('Marta');
 
-    const bySearch = await agent.get('/api/patients?search=ortiz');
+    const bySearch = await adminAgent.get('/api/patients?search=ortiz');
     expect(bySearch.body.patients).toHaveLength(1);
     expect(bySearch.body.patients[0].lastName).toBe('Ortiz');
   });
 
   it('paginates results', async () => {
     for (let i = 0; i < 3; i++) await seedPatient({ memberId: `DEMO-9002${i}` });
-    const agent = await loginAs('admin@example.com', 'secret123');
-    const res = await agent.get('/api/patients?limit=2&page=1');
+    const res = await adminAgent.get('/api/patients?limit=2&page=1');
     expect(res.status).toBe(200);
     expect(res.body.patients).toHaveLength(2);
     expect(res.body.total).toBe(3);
@@ -135,23 +140,21 @@ describe('patients API', () => {
 
   it('gets a patient by id and 404s for unknown or malformed ids', async () => {
     const p = await seedPatient();
-    const agent = await loginAs('viewer@example.com', 'secret123');
 
-    const ok = await agent.get(`/api/patients/${p.id}`);
+    const ok = await viewerAgent.get(`/api/patients/${p.id}`);
     expect(ok.status).toBe(200);
     expect(ok.body.patient.id).toBe(p.id);
 
-    const missing = await agent.get('/api/patients/507f1f77bcf86cd799439011');
+    const missing = await viewerAgent.get('/api/patients/507f1f77bcf86cd799439011');
     expect(missing.status).toBe(404);
 
-    const malformed = await agent.get('/api/patients/not-a-valid-id');
+    const malformed = await viewerAgent.get('/api/patients/not-a-valid-id');
     expect(malformed.status).toBe(404);
   });
 
   it('lets staff update a patient', async () => {
     const p = await seedPatient({ riskLevel: 'low' });
-    const agent = await loginAs('staff@example.com', 'secret123');
-    const res = await agent
+    const res = await staffAgent
       .patch(`/api/patients/${p.id}`)
       .send({ riskLevel: 'medium', status: 'inactive' });
     expect(res.status).toBe(200);
@@ -162,12 +165,10 @@ describe('patients API', () => {
   it('only lets admins delete a patient (and audits it)', async () => {
     const p = await seedPatient();
 
-    const staff = await loginAs('staff@example.com', 'secret123');
-    const forbidden = await staff.delete(`/api/patients/${p.id}`);
+    const forbidden = await staffAgent.delete(`/api/patients/${p.id}`);
     expect(forbidden.status).toBe(403);
 
-    const admin = await loginAs('admin@example.com', 'secret123');
-    const ok = await admin.delete(`/api/patients/${p.id}`);
+    const ok = await adminAgent.delete(`/api/patients/${p.id}`);
     expect(ok.status).toBe(204);
     expect(await Patient.findById(p.id)).toBeNull();
     const audits = await AuditEvent.find({ action: 'patient.delete' });
