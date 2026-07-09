@@ -19,4 +19,14 @@ const patientSchema = new Schema(
   { timestamps: true },
 );
 
+// Expose a clean `id` virtual and drop Mongo internals (_id, __v) from API JSON.
+patientSchema.set('toJSON', {
+  virtuals: true,
+  versionKey: false,
+  transform(_doc, ret) {
+    const { _id, ...rest } = ret;
+    return rest;
+  },
+});
+
 export const Patient = model('Patient', patientSchema);
