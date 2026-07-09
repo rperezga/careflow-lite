@@ -4,6 +4,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { authRouter } from './routes/auth.routes';
 import { healthRouter } from './routes/health.routes';
 import { careTasksRouter } from './routes/careTasks.routes';
+import { dashboardRouter } from './routes/dashboard.routes';
 import { patientsRouter } from './routes/patients.routes';
 import { usersRouter } from './routes/users.routes';
 
@@ -17,6 +18,7 @@ export function createApp() {
   app.use('/api/users', usersRouter);
   app.use('/api/patients', patientsRouter);
   app.use('/api/care-tasks', careTasksRouter);
+  app.use('/api/dashboard', dashboardRouter);
   app.use(errorHandler);
   return app;
 }
