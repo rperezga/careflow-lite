@@ -36,3 +36,29 @@ export interface DashboardSummary {
   };
   recentActivity: ActivityItem[];
 }
+
+export type PatientStatus = 'active' | 'inactive';
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface Patient {
+  id: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth?: string;
+  memberId: string;
+  phone?: string;
+  email?: string;
+  status: PatientStatus;
+  riskLevel: RiskLevel;
+  primaryCareManager?: string | null;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PatientsResponse {
+  patients: Patient[];
+  total: number;
+  page: number;
+  limit: number;
+}
