@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
 
-// Minimal data-fetching hook (no extra dependency): loads a GET endpoint and
-// tracks loading/error/data, cancelling stale updates on unmount or path change.
+// Minimal data-fetching hook (no extra dependency): loads a GET endpoint,
+// tracks loading/error/data, cancels stale updates, and exposes refetch().
 export function useApiData<T>(path: string) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -26,7 +27,8 @@ export function useApiData<T>(path: string) {
     return () => {
       active = false;
     };
-  }, [path]);
+  }, [path, tick]);
 
-  return { data, error, loading };
+  const refetch = useCallback(() => setTick((t) => t + 1), []);
+  return { data, error, loading, refetch };
 }

@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage';
 import ForbiddenPage from './pages/ForbiddenPage';
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
+import PatientDetailPage from './pages/PatientDetailPage';
 import PatientsPage from './pages/PatientsPage';
 import UsersPage from './pages/UsersPage';
 
@@ -19,6 +20,7 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/patients" element={<PatientsPage />} />
+          <Route path="/patients/:id" element={<PatientDetailPage />} />
           <Route path="/care-tasks" element={<CareTasksPage />} />
           <Route path="/forbidden" element={<ForbiddenPage />} />
 
