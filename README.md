@@ -32,6 +32,30 @@ A staff-facing internal tool with **role-based access** (admin / staff / viewer)
 Everything is gated by a cookie-based session, with **least-privilege** enforced on both the API
 and the UI.
 
+## Screenshots
+
+Dashboard — aggregated snapshot (risk, open/overdue/unassigned tasks, recent activity)
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+Patients — searchable, filterable, paginated panel
+
+![Patients](docs/screenshots/patients.png)
+
+Care Tasks — board grouped by status, with priority and assignee
+
+![Care Tasks](docs/screenshots/care-tasks.png)
+
+Users — admin team management (roles, active status)
+
+![Users](docs/screenshots/users.png)
+
+<details><summary>Login</summary>
+
+![Login](docs/screenshots/login.png)
+
+</details>
+
 ## Tech stack
 
 | Layer    | Choices                                                                 |
