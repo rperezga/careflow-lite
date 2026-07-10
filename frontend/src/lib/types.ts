@@ -62,3 +62,45 @@ export interface PatientsResponse {
   page: number;
   limit: number;
 }
+
+export type TaskStatus = 'open' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
+export type TaskPriority = 'urgent' | 'high' | 'medium' | 'low';
+export type TaskCategory =
+  | 'follow_up'
+  | 'documentation'
+  | 'access_issue'
+  | 'medication'
+  | 'appointment'
+  | 'billing'
+  | 'other';
+
+export interface CareTask {
+  id: string;
+  patient: string;
+  title: string;
+  description?: string;
+  category: TaskCategory;
+  priority: TaskPriority;
+  status: TaskStatus;
+  assignedTo?: string | null;
+  createdBy: string;
+  dueDate?: string;
+  blockedReason?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CareTasksResponse {
+  tasks: CareTask[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface DirectoryUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+}
