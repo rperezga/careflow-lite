@@ -104,3 +104,12 @@ export interface DirectoryUser {
   email: string;
   role: Role;
 }
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  active: boolean;
+  createdAt: string;
+}

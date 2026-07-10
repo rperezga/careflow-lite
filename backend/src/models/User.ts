@@ -14,4 +14,14 @@ const userSchema = new Schema(
   { timestamps: true },
 );
 
+// Expose a clean `id` and never leak Mongo internals or the password hash in JSON.
+userSchema.set('toJSON', {
+  virtuals: true,
+  versionKey: false,
+  transform(_doc, ret) {
+    const { _id, passwordHash: _pw, ...rest } = ret;
+    return rest;
+  },
+});
+
 export const User = model('User', userSchema);
