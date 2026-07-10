@@ -34,3 +34,16 @@ export function humanLabel(value: string): string {
   const s = value.replace(/_/g, ' ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+export const TASK_CATEGORY_ORDER = [
+  'follow_up',
+  'documentation',
+  'access_issue',
+  'medication',
+  'appointment',
+  'billing',
+  'other',
+] as const;
+
+// Columns shown on the task board (cancelled tasks appear only in the list view).
+export const BOARD_COLUMNS = ['open', 'in_progress', 'blocked', 'done'] as const;
