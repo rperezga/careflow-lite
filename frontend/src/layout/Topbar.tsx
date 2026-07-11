@@ -1,5 +1,7 @@
 import { Bell, HelpCircle, Search } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { cn } from '../lib/cn';
+import { useRealtime } from '../realtime/RealtimeProvider';
 import { Badge, roleColor } from '../components/ui/Badge';
 
 function initialsOf(name: string): string {
@@ -13,6 +15,7 @@ function initialsOf(name: string): string {
 
 export function Topbar() {
   const { user } = useAuth();
+  const { connected } = useRealtime();
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-6">
@@ -26,6 +29,15 @@ export function Topbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-4">
+        <span
+          className="flex items-center gap-1.5 text-xs font-medium text-slate-500"
+          title={connected ? 'Live updates connected' : 'Reconnecting…'}
+        >
+          <span
+            className={cn('h-2 w-2 rounded-full', connected ? 'bg-green-500' : 'bg-slate-300')}
+          />
+          {connected ? 'Live' : 'Offline'}
+        </span>
         <button
           type="button"
           className="text-slate-400 hover:text-slate-600"
