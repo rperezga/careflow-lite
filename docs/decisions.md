@@ -47,3 +47,25 @@ Concrete decisions made while building the app, each meant to be defensible in a
 - **Design system before screens.** Visual tokens were designed in Google Stitch, then
   translated into a Tailwind theme and a small reusable component kit, so the four screens shared
   one consistent language from day one.
+
+## 2026-07 — Incident: a health check that lied
+
+A misconfigured deployment pointed the process at the wrong `.env`, so `MONGODB_URI` had no
+credentials. MongoDB completed the connection handshake (which needs no auth) but rejected every
+query with `Command find requires authentication`. Two design flaws turned a config mistake into a
+silent outage:
+
+- **`GET /health` did not touch the database**, so it happily returned `ok` while nothing worked.
+- **`auth.routes` was the one route file without `asyncHandler`.** Express 4 does not forward a
+  rejected promise to the error middleware, so the login request produced **no response at all** —
+  the browser spun forever and Cloudflare eventually returned a `524`.
+
+Decisions taken:
+
+- **Health checks must prove readiness, not liveness.** `/health` now runs `dbStats`, a command that
+  **requires authentication**, and returns **503** when it fails. A plain `ping` was rejected on
+  purpose: MongoDB answers it without auth, so it would have reported the same false `ok`.
+- **Every async route is wrapped.** `asyncHandler` was retrofitted to the auth and users routes, so a
+  failing dependency yields a logged `500` instead of a hung request. A regression test asserts that
+  a rejecting database makes `POST /api/auth/login` answer `500` and never hang.
+- **The deployment runbook now pins an absolute `--env-file` path** and warns against a root `.env`.
