@@ -1,5 +1,5 @@
 [Unit]
-Description=careflow-lite: nightly MongoDB backup
+Description=careflow-lite: nightly MongoDB backup (whole instance)
 After=network-online.target mongod.service
 Wants=network-online.target
 
@@ -7,5 +7,5 @@ Wants=network-online.target
 Type=oneshot
 User=roger
 ExecStart=/home/roger/apps/careflow-lite/ops/backup/mongo-backup.sh
-# One run at a time, ever.
-ExecStartPre=/usr/bin/flock -n /tmp/careflow-backup.lock true
+# Locking lives inside the script (it re-execs itself under flock), so a manual run and the timer
+# cannot collide either. An ExecStartPre flock would release the lock before ExecStart even began.
