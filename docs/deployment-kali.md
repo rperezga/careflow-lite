@@ -173,6 +173,17 @@ pm2 restart careflow-lite --update-env
 # npm run seed   # only if you want to reset demo data
 ```
 
+## Backups
+
+MongoDB is backed up nightly, and the backups are **proved restorable every week by an automated
+restore drill**. Setup, the restore procedure for a bad day, and the honest limits of the scheme are
+in **[docs/backup-and-restore.md](./backup-and-restore.md)**.
+
+```bash
+systemctl list-timers 'careflow-*'      # is it actually scheduled?
+tail -20 /home/roger/backups/mongo/backup.log
+```
+
 ## Security notes
 
 - MongoDB is **localhost-only with auth** and is never tunnelled.

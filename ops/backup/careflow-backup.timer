@@ -1,0 +1,12 @@
+[Unit]
+Description=careflow-lite: run the MongoDB backup every night
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+# If the machine was off at 03:15, run as soon as it comes back. A home server that gets shut
+# down must not silently skip its backups.
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

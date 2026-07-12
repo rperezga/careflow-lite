@@ -69,3 +69,56 @@ Decisions taken:
   failing dependency yields a logged `500` instead of a hung request. A regression test asserts that
   a rejecting database makes `POST /api/auth/login` answer `500` and never hang.
 - **The deployment runbook now pins an absolute `--env-file` path** and warns against a root `.env`.
+
+## 2026-07 — A backup you have never restored is not a backup
+
+The database had no backups. Adding `mongodump` to cron would have technically closed that gap and
+would have been the wrong fix, because the failure mode that actually hurts is not "we forgot to
+take a backup" — it is **"we took backups for six months and none of them restore."** So the system
+is built to prove the claim rather than make it.
+
+**Everything, including what does not exist yet.** The dump takes no `--db`: it captures the whole
+instance, so a database created next month is protected the night it appears. The set of protected
+databases is not a list a human maintains — which is the only kind of list that stays correct.
+
+**The drill restores into a throwaway server, not into production.** A drill has to _write_ what it
+restores. Restoring into a temporary database next to the live one — the obvious design — would mean
+the nightly automation needs write and `dropDatabase` rights on the production server. _A process
+whose job is to protect the data must not be able to destroy it._ So the drill starts its own
+MongoDB (own port, own storage, no auth, loopback), restores there, compares counts against the live
+databases **read-only**, and deletes it. The backup identity never holds more than the `backup` role.
+It also proves more: restoring into a **fresh, empty server** is the real disaster scenario — new
+machine, nothing on it, one file. Restoring beside a live database quietly leans on state that was
+already there.
+
+**Failure is loud.** Silence is the dangerous outcome: a backup that fails quietly hands you
+confidence you did not earn, and you find out on the one night it matters. Any non-zero exit logs an
+`ERROR` and pushes a Telegram alert — and the runbook includes a step that _deliberately breaks the
+backup_ to watch the alarm fire, because an alarm nobody has seen go off is an alarm nobody knows
+works.
+
+**Safe under failure.** The archive is verified with `mongorestore --dryRun` before it is kept, and
+written as `*.partial`, renamed only once it passes. A half-written file never carries a name the
+rest of the system trusts, and a failing run can only ever delete its own temp file. Rotation runs
+only after a verified success, so it cannot empty the directory.
+
+Three of those properties exist because someone tried to break the thing:
+
+- A test that failed the dump mid-run caught the first version **deleting yesterday's good archive**
+  on its way out (same-second timestamp → same filename → the cleanup handler removed a file it had
+  not created). That is where `*.partial` came from.
+- Review caught `flock` sitting in `ExecStartPre`, where it took the lock, ran `true`, and released
+  it _before_ the backup started. Decorative, not protective. The script now re-execs itself under
+  the lock, which also covers manual runs.
+- Review caught the drill being handed the **read-only** backup credential to do writes with — it
+  would have failed on its first real run. That is what pushed the drill onto its own server, which
+  turned out to be the better design anyway.
+
+The scripts run unattended at 3am with nobody watching, so CI lints them like everything else:
+`shellcheck` on the shell, `systemd-analyze verify` on the units.
+
+**Known limit, stated rather than hidden:** the archives sit on the same disk as the database. That
+covers a bad `dropDatabase`, a bad migration, a corrupted collection — not a dead disk. It was not
+extended off-site because the data here is **synthetic and re-seedable**; nothing on that disk is
+irreplaceable. A system holding real data would need a second target, and the same rule would apply
+to it: it is not a backup until you have restored it.

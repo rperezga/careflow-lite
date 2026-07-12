@@ -82,6 +82,10 @@ This repo is built the way a small team would work, not as a one-shot dump:
 - **Design system first** — the visual language ("Clinical Precision": calm teal, slate,
   Inter, semantic status pills) was designed in Google Stitch and translated into a Tailwind
   theme + a small reusable component kit before the screens were built.
+- **Backups that are proved, not assumed** — a nightly `mongodump` that refuses to keep an archive
+  it cannot read back, and a **weekly restore drill** that actually restores the newest archive into
+  a throwaway database and compares document counts. A backup nobody has ever restored is not a
+  backup; it is a hope. See **[`docs/backup-and-restore.md`](docs/backup-and-restore.md)**.
 
 See **[`docs/decisions.md`](docs/decisions.md)** for the decisions behind these — each one is
 meant to be explainable in an interview.
@@ -126,9 +130,11 @@ The exact same four checks run in CI on every push and PR.
 
 ## Deployment
 
-Self-hosted on Kali Linux: MongoDB (localhost + auth), a single pm2-managed Node process, and a
-Cloudflare Tunnel for HTTPS — no open router ports. Full runbook:
-**[`docs/deployment-kali.md`](docs/deployment-kali.md)**.
+Self-hosted on Kali Linux: MongoDB (localhost + auth), a single pm2-managed Node process bound to
+loopback, and a Cloudflare Tunnel for HTTPS — no open router ports. Nightly backups with an
+automated restore drill. Runbooks:
+**[`docs/deployment-kali.md`](docs/deployment-kali.md)** ·
+**[`docs/backup-and-restore.md`](docs/backup-and-restore.md)**.
 
 ## Project layout
 
@@ -136,7 +142,8 @@ Cloudflare Tunnel for HTTPS — no open router ports. Full runbook:
 backend/    Express API, models, auth, audit, tests
 frontend/   React app (Vite) — screens, UI kit, design system
 shared/     Shared TypeScript types/constants
-docs/       architecture · decisions (ADRs) · deployment · data policy · openapi
+ops/        Operations: backup + restore scripts, systemd units
+docs/       architecture · decisions (ADRs) · deployment · backup/restore · data policy · openapi
 ```
 
 ## License
