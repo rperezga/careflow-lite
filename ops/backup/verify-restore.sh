@@ -50,8 +50,8 @@ cleanup() {
   if [ -n "$MONGOD_PID" ] && kill -0 "$MONGOD_PID" 2>/dev/null; then
     mongosh "$DRILL_URI" --quiet --eval 'db.getSiblingDB("admin").shutdownServer({force:true})' \
       >/dev/null 2>&1 || kill "$MONGOD_PID" 2>/dev/null || true
-      local i
-    for i in {1..20}; do kill -0 "$MONGOD_PID" 2>/dev/null || break; sleep 0.5; done
+    # Give it 10s to go down on its own before reaching for -9.
+    for _ in {1..20}; do kill -0 "$MONGOD_PID" 2>/dev/null || break; sleep 0.5; done
     kill -9 "$MONGOD_PID" 2>/dev/null || true
   fi
   if [ -n "$SCRATCH_DIR" ] && [ -d "$SCRATCH_DIR" ]; then
