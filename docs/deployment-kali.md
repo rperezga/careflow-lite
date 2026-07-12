@@ -109,10 +109,16 @@ cd ~/apps/careflow-lite
 ```bash
 NODE_ENV=production
 PORT=4000
+HOST=127.0.0.1
 MONGODB_URI=mongodb://careflow_app:<STRONG_PASSWORD>@127.0.0.1:27017/careflow_lite?authSource=careflow_lite
 JWT_SECRET=<openssl rand -hex 32>
 COOKIE_SECURE=true
 ```
+
+> `HOST=127.0.0.1` is the default and should stay that way here. The tunnel connects to the app over
+> loopback, so the process never needs to be reachable from the network. Binding to every interface
+> would publish the API on the host's public IPv6 address, letting anyone reach it **without going
+> through the tunnel**.
 
 Build and seed synthetic demo data:
 
@@ -186,6 +192,9 @@ tail -20 /home/roger/backups/mongo/backup.log
 
 ## Security notes
 
+- **The app listens on loopback only** (`HOST=127.0.0.1`). The Cloudflare Tunnel is the single front
+  door; the port is not reachable from the LAN or from the internet. Verify with
+  `ss -lntp | grep 4000` — the address must be `127.0.0.1:4000`, never `*:4000`.
 - MongoDB is **localhost-only with auth** and is never tunnelled.
 - `JWT_SECRET` is a strong random value; `COOKIE_SECURE=true` (cookies only over HTTPS).
 - `backend/.env` is `chmod 600` and git-ignored.

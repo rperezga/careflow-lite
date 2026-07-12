@@ -122,3 +122,21 @@ covers a bad `dropDatabase`, a bad migration, a corrupted collection — not a d
 extended off-site because the data here is **synthetic and re-seedable**; nothing on that disk is
 irreplaceable. A system holding real data would need a second target, and the same rule would apply
 to it: it is not a backup until you have restored it.
+
+## 2026-07 — The tunnel is the only front door
+
+`server.listen(PORT)` omits the host, and Node then listens on **every** interface. On the
+production host that included a globally routable IPv6 address, so the API was reachable from the
+internet **without passing through the Cloudflare Tunnel** that is supposed to front it — no TLS
+termination by the proxy, no WAF, no access logs. Nothing had been attacked; the door was simply
+unlocked, and it took a port audit to notice.
+
+- **`HOST` is now part of the validated environment and defaults to `127.0.0.1`.** The reverse proxy
+  reaches the app over loopback, so binding wider buys nothing and costs exposure. Making the app
+  public is now a deliberate `HOST=0.0.0.0` opt-in for the deployments that need it (a container, a
+  PaaS), instead of the accident that happens when you say nothing.
+- **A test asserts the default.** It binds a real server to `env.HOST` and checks the resolved
+  address is `127.0.0.1`, so a future refactor cannot quietly widen it again.
+- **Defence in depth, not instead of it.** The host also runs a firewall that denies inbound traffic
+  by default. Either control alone would have closed this hole; the point of having both is that
+  neither has to be perfect.

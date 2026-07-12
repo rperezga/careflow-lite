@@ -13,8 +13,8 @@ async function start(): Promise<void> {
   const server = createServer(app);
   attachRealtime(server);
 
-  server.listen(env.PORT, () => {
-    logger.info(`careflow-lite backend listening on port ${env.PORT}`);
+  server.listen(env.PORT, env.HOST, () => {
+    logger.info(`careflow-lite backend listening on ${env.HOST}:${env.PORT}`);
   });
 }
 
