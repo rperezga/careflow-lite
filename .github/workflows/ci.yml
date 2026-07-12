@@ -38,11 +38,20 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           shellcheck ops/backup/*.sh
+      # `systemd-analyze verify` also checks that ExecStart exists and that User= is a real user.
+      # Those two values describe the production host, not a GitHub runner, so we rewrite them into
+      # their local equivalents before verifying. Everything else about the units — syntax,
+      # directives, dependencies, the timer expressions — is checked exactly as shipped. Faking a
+      # /home/roger tree on the runner would have made the check pass by lying to it.
       - name: systemd units are valid
         run: |
+          mkdir -p /tmp/units
           for u in ops/backup/*.service ops/backup/*.timer; do
-            systemd-analyze verify "$u" || exit 1
+            sed -e "s#/home/roger/apps/careflow-lite#${GITHUB_WORKSPACE}#g" \
+                -e "s#^User=roger\$#User=$(id -un)#" \
+                "$u" > "/tmp/units/$(basename "$u")"
           done
+          systemd-analyze verify /tmp/units/*.service /tmp/units/*.timer
       - name: scripts are executable
         run: |
           for f in ops/backup/*.sh; do
