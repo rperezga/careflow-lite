@@ -69,3 +69,35 @@ Decisions taken:
   failing dependency yields a logged `500` instead of a hung request. A regression test asserts that
   a rejecting database makes `POST /api/auth/login` answer `500` and never hang.
 - **The deployment runbook now pins an absolute `--env-file` path** and warns against a root `.env`.
+
+## 2026-07 — A backup you have never restored is not a backup
+
+The database had no backups at all. Adding `mongodump` to cron would have technically closed that
+gap, and would have been the wrong fix, because the failure mode that actually hurts is not "we
+forgot to take a backup" — it is "we took backups for six months and none of them restore."
+
+So the system is built around proving the claim rather than making it:
+
+- **The dump is read back before it is kept.** `mongorestore --dryRun` parses the archive without
+  writing. An archive that cannot be parsed is deleted, and the run fails.
+- **The archive is written to `*.partial` and renamed only after passing that check.** This is what
+  makes the system safe under failure: a half-written file never carries a name the rest of the
+  system trusts, and a failing run can only ever delete its own temp file — never the last good
+  archive. (This was not the first design. A test that made the dump fail during a run showed the
+  original version deleting yesterday's good backup on its way out.)
+- **A weekly restore drill actually restores the newest archive** into a throwaway database,
+  compares document counts collection by collection against the live database, and drops it. Its
+  failure is an alert in its own right. This is the only check that can catch an archive that is
+  valid and empty.
+- **Failure is loud.** Silence is the dangerous outcome: a backup that fails quietly hands you
+  confidence you did not earn, and you find out on the one night it matters. Any non-zero exit
+  writes an `ERROR` line and pushes a Telegram alert.
+- **A dedicated `backup`-role user**, not the application user (which can write) and not `root`.
+  Least privilege applies to automation too — most credentials that leak are the ones nobody
+  remembers issuing.
+
+Known limit, stated rather than hidden: the archives live on the same disk as the database. That
+covers a bad `dropDatabase`, a bad migration, a corrupted collection — not a dead disk. It was not
+extended off-site because **the data here is synthetic and re-seedable**, so there is nothing on
+that disk that cannot be recreated. A system holding real data would need a second target, and the
+same rule would apply to it: it is not a backup until you have restored it.

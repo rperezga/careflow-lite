@@ -1,0 +1,11 @@
+[Unit]
+Description=careflow-lite: nightly MongoDB backup
+After=network-online.target mongod.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=roger
+ExecStart=/home/roger/apps/careflow-lite/ops/backup/mongo-backup.sh
+# One run at a time, ever.
+ExecStartPre=/usr/bin/flock -n /tmp/careflow-backup.lock true

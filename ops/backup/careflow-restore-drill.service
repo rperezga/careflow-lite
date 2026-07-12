@@ -1,0 +1,8 @@
+[Unit]
+Description=careflow-lite: weekly restore drill (proves the backups are restorable)
+After=network-online.target mongod.service
+
+[Service]
+Type=oneshot
+User=roger
+ExecStart=/home/roger/apps/careflow-lite/ops/backup/verify-restore.sh
