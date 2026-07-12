@@ -140,3 +140,20 @@ unlocked, and it took a port audit to notice.
 - **Defence in depth, not instead of it.** The host also runs a firewall that denies inbound traffic
   by default. Either control alone would have closed this hole; the point of having both is that
   neither has to be perfect.
+
+## 2026-07 — Dependency audit: fix the cause, not the symptom
+
+`npm audit` reported 5 vulnerabilities (1 critical). The obvious move, `npm audit fix --force`, was
+rejected: it rewrites version ranges to whatever silences the report, breaking changes included, and
+it teaches you nothing about what was actually wrong.
+
+Reading the tree first showed all five came from **one root cause** — an outdated `vite`, whose
+`esbuild` dev-server advisory then cascaded through `vitest`, `vite-node` and `@vitest/mocker`. It
+also showed something worth stating plainly: **`npm audit --omit=dev` reported zero
+vulnerabilities**. Nothing shipped to production was ever affected; the exposure was a development
+server, on a developer's machine.
+
+That does not make it acceptable — a dev-server SSRF is a real thing to fix, and a repository people
+read as a work sample should not greet them with a red banner. So the toolchain was moved forward
+deliberately (`vite` 5 → 8, `vitest` 2 → 4, `@vitejs/plugin-react` 4 → 6) and the whole suite was
+re-run to prove nothing regressed. One targeted upgrade, five findings closed, zero test changes.
