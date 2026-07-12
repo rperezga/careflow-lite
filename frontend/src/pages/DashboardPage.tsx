@@ -16,12 +16,17 @@ import {
 } from '../lib/domain';
 import { timeAgo } from '../lib/time';
 import type { DashboardSummary } from '../lib/types';
+import { useRealtimeEvent } from '../realtime/RealtimeProvider';
 import { useApiData } from '../lib/useApi';
 import { PageHeader } from './PagePlaceholder';
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { data, loading, error } = useApiData<DashboardSummary>('/dashboard/summary');
+  const { data, loading, error, refetch } = useApiData<DashboardSummary>('/dashboard/summary');
+
+  // Live updates: the snapshot re-aggregates when anything changes.
+  useRealtimeEvent('care-task.changed', refetch);
+  useRealtimeEvent('patient.changed', refetch);
 
   return (
     <div>

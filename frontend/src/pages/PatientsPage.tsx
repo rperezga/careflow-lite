@@ -15,6 +15,7 @@ import { api } from '../lib/api';
 import { humanLabel, patientStatusColor, riskColor } from '../lib/domain';
 import { timeAgo } from '../lib/time';
 import type { Patient, PatientsResponse } from '../lib/types';
+import { useRealtimeEvent } from '../realtime/RealtimeProvider';
 import { useApiData } from '../lib/useApi';
 import { PageHeader } from './PagePlaceholder';
 import { PatientForm } from './patients/PatientForm';
@@ -53,6 +54,9 @@ export default function PatientsPage() {
   }, [page, search, risk, status]);
 
   const { data, loading, error, refetch } = useApiData<PatientsResponse>(path);
+
+  // Live updates: refresh the list when a teammate changes a patient.
+  useRealtimeEvent('patient.changed', refetch);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);

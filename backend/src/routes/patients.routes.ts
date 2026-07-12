@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { requireAuth } from '../middleware/requireAuth';
 import { requireRole } from '../middleware/requireRole';
 import { Patient } from '../models/Patient';
+import { broadcast } from '../realtime/hub';
 import { recordAudit } from '../services/audit.service';
 import { asyncHandler } from '../utils/asyncHandler';
 import {
@@ -85,6 +86,7 @@ patientsRouter.post(
       entityId: patient.id,
       summary: `Created patient ${patient.memberId}`,
     });
+    broadcast({ type: 'patient.changed', action: 'create', id: patient.id });
     res.status(201).json({ patient });
   }),
 );
@@ -113,6 +115,7 @@ patientsRouter.patch(
       entityId: patient.id,
       summary: `Updated patient ${patient.memberId}`,
     });
+    broadcast({ type: 'patient.changed', action: 'update', id: patient.id });
     res.json({ patient });
   }),
 );
@@ -135,6 +138,7 @@ patientsRouter.delete(
       entityId: patient.id,
       summary: `Deleted patient ${patient.memberId}`,
     });
+    broadcast({ type: 'patient.changed', action: 'delete', id: patient.id });
     res.status(204).send();
   }),
 );

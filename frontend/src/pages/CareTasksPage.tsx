@@ -18,6 +18,7 @@ import {
   taskStatusColor,
 } from '../lib/domain';
 import type { CareTask, CareTasksResponse, DirectoryUser, PatientsResponse } from '../lib/types';
+import { useRealtimeEvent } from '../realtime/RealtimeProvider';
 import { useApiData } from '../lib/useApi';
 import { PageHeader } from './PagePlaceholder';
 import { TaskForm } from './tasks/TaskForm';
@@ -45,6 +46,9 @@ export default function CareTasksPage() {
   const { data, loading, error, refetch } = useApiData<CareTasksResponse>(path);
   const { data: dir } = useApiData<{ users: DirectoryUser[] }>('/directory/users');
   const { data: pts } = useApiData<PatientsResponse>('/patients?limit=100');
+
+  // Live updates: refresh the board when a teammate changes a task.
+  useRealtimeEvent('care-task.changed', refetch);
 
   const userMap = useMemo(
     () => new Map((dir?.users ?? []).map((u) => [u.id, u.name] as const)),

@@ -5,6 +5,7 @@ import { requireRole } from '../middleware/requireRole';
 import { CareTask } from '../models/CareTask';
 import { Patient } from '../models/Patient';
 import { User } from '../models/User';
+import { broadcast } from '../realtime/hub';
 import { recordAudit } from '../services/audit.service';
 import { asyncHandler } from '../utils/asyncHandler';
 import {
@@ -93,6 +94,7 @@ careTasksRouter.post(
       entityId: task.id,
       summary: `Created task "${task.title}"`,
     });
+    broadcast({ type: 'care-task.changed', action: 'create', id: task.id });
     res.status(201).json({ task });
   }),
 );
@@ -121,6 +123,7 @@ careTasksRouter.patch(
       entityId: task.id,
       summary: `Updated task "${task.title}"`,
     });
+    broadcast({ type: 'care-task.changed', action: 'update', id: task.id });
     res.json({ task });
   }),
 );
@@ -151,6 +154,7 @@ careTasksRouter.patch(
       entityId: task.id,
       summary: `Task "${task.title}" -> ${status}`,
     });
+    broadcast({ type: 'care-task.changed', action: 'status', id: task.id });
     res.json({ task });
   }),
 );
@@ -184,6 +188,7 @@ careTasksRouter.patch(
       entityId: task.id,
       summary: assignedTo ? `Assigned task to ${assignedTo}` : 'Unassigned task',
     });
+    broadcast({ type: 'care-task.changed', action: 'assign', id: task.id });
     res.json({ task });
   }),
 );
@@ -206,6 +211,7 @@ careTasksRouter.delete(
       entityId: task.id,
       summary: `Deleted task "${task.title}"`,
     });
+    broadcast({ type: 'care-task.changed', action: 'delete', id: task.id });
     res.status(204).send();
   }),
 );
