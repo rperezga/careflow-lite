@@ -124,11 +124,24 @@ npm run seed           # synthetic users, patients and tasks (no real data)
 
 ## 3. Run with pm2
 
+The backend reads its configuration from **`backend/.env`**, loaded by Node's `--env-file`.
+Pass an **absolute path**, so the right file is found regardless of the working directory:
+
 ```bash
-pm2 start backend/dist/server.js --name careflow-lite --update-env
+pm2 start /home/roger/apps/careflow-lite/backend/dist/server.js \
+  --name careflow-lite \
+  --node-args="--env-file=/home/roger/apps/careflow-lite/backend/.env" \
+  --cwd /home/roger/apps/careflow-lite
 pm2 save
 pm2 startup            # run the printed command once (requires sudo) so it survives reboot
 ```
+
+> ⚠️ **Never create a `.env` in the repository root.** A relative `--env-file=.env` resolves
+> against the working directory and would load that root file instead of `backend/.env`. The root
+> file has no MongoDB credentials, so Mongo completes the handshake but rejects every query with
+> `Command find requires authentication` — the process looks healthy while nothing works. This
+> exact mistake caused a production outage; `GET /health` now performs an **authenticated** database
+> command and answers **503** in that situation.
 
 ## 4. Cloudflare Tunnel (HTTPS)
 
@@ -143,7 +156,7 @@ Only the app port is tunnelled — MongoDB (27017) is never exposed.
 ## 5. Verify
 
 ```bash
-curl -s http://127.0.0.1:4000/health          # {"status":"ok",...}
+curl -s http://127.0.0.1:4000/health          # {"status":"ok","db":"ok",...}  (503 if the DB is not usable)
 curl -sI https://careflow.smectherapy.com/     # HTTP/2 200, serves the SPA
 ```
 
