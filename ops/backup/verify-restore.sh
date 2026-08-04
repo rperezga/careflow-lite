@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
+# Version 1.1.0 — manifest-first verification with a bounded legacy fallback.
 #
 # Restore drill — the whole point of the backup system.
 #
 # It restores the newest archive into a THROWAWAY MongoDB instance (its own port, its own dbpath,
-# no auth, loopback only), compares document counts collection by collection against the live
-# databases, and then deletes the instance entirely.
+# no auth, loopback only), compares document counts against the archive's count manifest (or a
+# bounded live-data fallback for legacy archives), and then deletes the instance entirely.
 #
 # Why a separate instance instead of a temporary database on the production server:
 #
@@ -21,6 +22,8 @@
 # Sunday after it appears. Nobody has to remember to add it here.
 #
 set -euo pipefail
+
+VERSION="1.1.0"
 
 ENV_FILE="${CAREFLOW_BACKUP_ENV:-/etc/careflow/backup.env}"
 [ -r "$ENV_FILE" ] || { echo "FATAL: cannot read env file: $ENV_FILE" >&2; exit 78; }
@@ -75,8 +78,13 @@ command -v mongod >/dev/null || { log ERROR "mongod not found on PATH"; false; }
 LATEST="$(find "$BACKUP_DIR" -maxdepth 1 -name 'mongo-all-*.archive.gz' -type f -printf '%T@ %p\n' \
   | sort -rn | head -1 | cut -d' ' -f2-)"
 [ -n "$LATEST" ] || { log ERROR "no archive found in $BACKUP_DIR"; false; }
+MANIFEST="${LATEST%.archive.gz}.counts.json"
 
-log INFO "restore drill: $(basename "$LATEST")"
+if [ -f "$MANIFEST" ]; then
+  log INFO "restore drill v${VERSION}: $(basename "$LATEST") with manifest $(basename "$MANIFEST")"
+else
+  log INFO "restore drill v${VERSION}: $(basename "$LATEST") without manifest; using legacy 2% drift guard"
+fi
 
 # --- 1. A throwaway MongoDB, on its own port, with its own storage, reachable only from loopback.
 SCRATCH_DIR="$(mktemp -d -t careflow-drill-XXXXXX)"
@@ -97,40 +105,91 @@ log INFO "throwaway mongod up on 127.0.0.1:${DRILL_PORT} (pid $MONGOD_PID, dbpat
 mongorestore --uri="$DRILL_URI" --archive="$LATEST" --gzip --nsExclude 'config.*' --quiet
 log INFO "archive restored into the throwaway instance"
 
-# --- 3. Compare, database by database, collection by collection. Discovered dynamically, so a new
-# ---    database is covered without anyone editing this script.
-REPORT="$(mongosh "$MONGO_URI" --quiet --eval "
-  const drill = Mongo('127.0.0.1:${DRILL_PORT}');
-  const skip = ['admin', 'config', 'local'];
-  const dbs = db.adminCommand({ listDatabases: 1, nameOnly: true }).databases
-    .map((d) => d.name).filter((n) => !skip.includes(n)).sort();
-  let bad = 0, checked = 0;
-  const out = [];
-  for (const name of dbs) {
-    const live = db.getSiblingDB(name);
-    const rest = drill.getDB(name);
-    const cols = live.getCollectionNames().filter((c) => !c.startsWith('system.')).sort();
-    if (cols.length === 0) { out.push(\`  \${name}: (no collections)\`); continue; }
-    out.push(\`  \${name}\`);
-    for (const c of cols) {
-      const a = live.getCollection(c).countDocuments();
-      const b = rest.getCollection(c).countDocuments();
-      checked++;
-      if (a !== b) bad++;
-      out.push(\`    \${c.padEnd(22)} live=\${String(a).padStart(7)}  restored=\${String(b).padStart(7)}  \${a === b ? 'OK' : 'MISMATCH'}\`);
+# --- 3. New archives use their immutable count manifest. Legacy archives compare against live
+# ---    data with the requested strict 2% drift allowance.
+if [ -f "$MANIFEST" ]; then
+  REPORT="$(COUNTS_MANIFEST="$MANIFEST" MANIFEST_NAME="$(basename "$MANIFEST")" \
+    mongosh "$DRILL_URI" --quiet --eval '
+    const fs = require("fs");
+    const expected = JSON.parse(fs.readFileSync(process.env.COUNTS_MANIFEST, "utf8"));
+    const skip = ["admin", "config", "local"];
+    const restoredDbs = db.adminCommand({ listDatabases: 1, nameOnly: true }).databases
+      .map((d) => d.name).filter((n) => !skip.includes(n)).sort();
+    const dbs = [...new Set([...Object.keys(expected), ...restoredDbs])].sort();
+    let bad = 0, checked = 0;
+    const out = ["COMPARE_MODE=manifest", `MANIFEST=${process.env.MANIFEST_NAME}`];
+    for (const name of dbs) {
+      const rest = db.getSiblingDB(name);
+      const hasExpectedDb = Object.prototype.hasOwnProperty.call(expected, name);
+      const hasRestoredDb = restoredDbs.includes(name);
+      if (!hasExpectedDb) { out.push(`  ${name}: UNEXPECTED_DB`); bad++; }
+      else if (!hasRestoredDb) { out.push(`  ${name}: MISSING_DB`); bad++; }
+      else out.push(`  ${name}`);
+      const expectedCols = Object.keys(expected[name] ?? {});
+      const restoredCols = rest.getCollectionNames().filter((c) => !c.startsWith("system."));
+      const cols = [...new Set([...expectedCols, ...restoredCols])].sort();
+      for (const c of cols) {
+        const hasExpected = Object.prototype.hasOwnProperty.call(expected[name] ?? {}, c);
+        const exists = restoredCols.includes(c);
+        const wanted = hasExpected ? expected[name][c] : null;
+        const restored = exists ? rest.getCollection(c).countDocuments() : 0;
+        checked++;
+        let status = "OK";
+        if (!hasExpected) status = "UNEXPECTED";
+        else if (!Number.isSafeInteger(wanted) || wanted < 0) status = "INVALID_MANIFEST";
+        else if (!exists) status = "MISSING";
+        else if (wanted !== restored) status = "MISMATCH";
+        if (status !== "OK") bad++;
+        out.push(`    ${c.padEnd(22)} expected=${String(wanted ?? "-").padStart(7)}  restored=${String(restored).padStart(7)}  ${status}`);
+      }
     }
-  }
-  if (dbs.length === 0) out.push('  (no user databases found — nothing to drill)');
-  print(out.join('\n'));
-  print(\`DRILL_SUMMARY databases=\${dbs.length} collections=\${checked} mismatches=\${bad}\`);
-  print(bad === 0 && checked > 0 ? 'DRILL_RESULT=PASS' : 'DRILL_RESULT=FAIL');
-")"
+    if (dbs.length === 0) out.push("  (manifest and restore contain no user databases)");
+    print(out.join("\n"));
+    print(`DRILL_SUMMARY mode=manifest databases=${dbs.length} collections=${checked} mismatches=${bad}`);
+    print(bad === 0 ? "DRILL_RESULT=PASS" : "DRILL_RESULT=FAIL");
+  ')"
+else
+  REPORT="$(mongosh "$MONGO_URI" --quiet --eval "
+    const drill = Mongo('127.0.0.1:${DRILL_PORT}');
+    const skip = ['admin', 'config', 'local'];
+    const liveDbs = db.adminCommand({ listDatabases: 1, nameOnly: true }).databases
+      .map((d) => d.name).filter((n) => !skip.includes(n)).sort();
+    const restoredDbs = drill.getDBNames().filter((n) => !skip.includes(n)).sort();
+    const dbs = [...new Set([...liveDbs, ...restoredDbs])].sort();
+    let bad = 0, checked = 0;
+    const out = ['COMPARE_MODE=legacy'];
+    for (const name of dbs) {
+      const source = db.getSiblingDB(name);
+      const rest = drill.getDB(name);
+      const liveCols = source.getCollectionNames().filter((c) => !c.startsWith('system.'));
+      const restoredCols = rest.getCollectionNames().filter((c) => !c.startsWith('system.'));
+      const cols = [...new Set([...liveCols, ...restoredCols])].sort();
+      if (cols.length === 0) { out.push(\`  \${name}: (no collections)\`); continue; }
+      out.push(\`  \${name}\`);
+      for (const c of cols) {
+        const live = liveCols.includes(c) ? source.getCollection(c).countDocuments() : 0;
+        const restored = restoredCols.includes(c) ? rest.getCollection(c).countDocuments() : 0;
+        checked++;
+        let status = 'OK';
+        if (restored > live) status = 'CORRUPTION';
+        else if (restored * 100 < live * 98) status = 'LOSS';
+        else if (restored < live) status = 'DRIFT_OK';
+        if (status === 'CORRUPTION' || status === 'LOSS') bad++;
+        out.push(\`    \${c.padEnd(22)} live=\${String(live).padStart(7)}  restored=\${String(restored).padStart(7)}  \${status}\`);
+      }
+    }
+    if (dbs.length === 0) out.push('  (no user databases found — nothing to drill)');
+    print(out.join('\n'));
+    print(\`DRILL_SUMMARY mode=legacy databases=\${dbs.length} collections=\${checked} mismatches=\${bad}\`);
+    print(bad === 0 ? 'DRILL_RESULT=PASS' : 'DRILL_RESULT=FAIL');
+  ")"
+fi
 
 printf '%s\n' "$REPORT" | tee -a "$LOG_FILE"
 
 if printf '%s' "$REPORT" | grep -q 'DRILL_RESULT=PASS'; then
   log INFO "RESTORE DRILL PASSED — $(basename "$LATEST") restores into an empty server, intact"
 else
-  log ERROR "RESTORE DRILL FAILED — the restored data does not match the live data"
+  log ERROR "RESTORE DRILL FAILED — the restored data does not match its integrity reference"
   false
 fi
