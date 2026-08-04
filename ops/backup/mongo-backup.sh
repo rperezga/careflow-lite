@@ -97,6 +97,8 @@ mongodump --uri="$MONGO_URI" --archive="$PARTIAL" --gzip 2>&1 \
 
 # Bugfix: derive the manifest from exactly what mongodump reported writing. Counting the live DB
 # after the dump has a race: a writer can add a document between the archive and the count query.
+# JavaScript template literals must reach mongosh without shell expansion.
+# shellcheck disable=SC2016
 COUNTS_DUMP_LOG="$DUMP_LOG" COUNTS_MANIFEST="$MANIFEST_PARTIAL" mongosh --nodb --quiet --eval '
   const skip = ["admin", "config", "local"];
   const counts = {};
@@ -118,6 +120,8 @@ COUNTS_DUMP_LOG="$DUMP_LOG" COUNTS_MANIFEST="$MANIFEST_PARTIAL" mongosh --nodb -
   fs.writeFileSync(process.env.COUNTS_MANIFEST, `${JSON.stringify(counts, null, 2)}\n`);
 ' >/dev/null
 [ -s "$MANIFEST_PARTIAL" ] || { log ERROR "count manifest is empty"; false; }
+# JavaScript template literals must reach mongosh without shell expansion.
+# shellcheck disable=SC2016
 COUNTS_MANIFEST="$MANIFEST_PARTIAL" mongosh --nodb --quiet --eval '
   const data = JSON.parse(fs.readFileSync(process.env.COUNTS_MANIFEST, "utf8"));
   if (!data || Array.isArray(data) || typeof data !== "object") throw new Error("manifest root must be an object");

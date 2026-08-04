@@ -108,6 +108,8 @@ log INFO "archive restored into the throwaway instance"
 # --- 3. New archives use their immutable count manifest. Legacy archives compare against live
 # ---    data with the requested strict 2% drift allowance.
 if [ -f "$MANIFEST" ]; then
+  # JavaScript template literals must reach mongosh without shell expansion.
+  # shellcheck disable=SC2016
   REPORT="$(COUNTS_MANIFEST="$MANIFEST" MANIFEST_NAME="$(basename "$MANIFEST")" \
     mongosh "$DRILL_URI" --quiet --eval '
     const fs = require("fs");
