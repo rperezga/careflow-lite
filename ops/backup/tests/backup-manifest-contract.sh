@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regression contract for the backup manifest and restore comparison. Version 1.1.1.
+# Regression contract for the backup manifest and restore comparison. Version 1.1.2.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -88,6 +88,11 @@ for arg in "$@"; do
 done
 printf '%s\n' '2026-08-03T00:00:00.000-0400 done dumping `alpha.empty` (0 documents)' >&2
 printf '%s\n' '2026-08-03T00:00:00.001-0400 done dumping `alpha.events` (10 documents)' >&2
+printf '%s\n' '2026-08-03T00:00:00.002-0400 done dumping `alpha.metrics.daily` (7 documents)' >&2
+printf '%s\n' '2026-08-03T00:00:00.003-0400 done dumping `alpha.system.views` (1 document)' >&2
+printf '%s\n' '2026-08-03T00:00:00.004-0400 done dumping `admin.system.users` (1 document)' >&2
+printf '%s\n' '2026-08-03T00:00:00.005-0400 done dumping `config.settings` (1 document)' >&2
+printf '%s\n' '2026-08-03T00:00:00.006-0400 done dumping `local.oplog.rs` (1 document)' >&2
 EOF
 cat >"$TMP/bin/mongorestore" <<'EOF'
 #!/usr/bin/env bash
@@ -119,7 +124,7 @@ import json, stat, sys
 from pathlib import Path
 path = Path(sys.argv[1])
 data = json.loads(path.read_text(encoding="utf-8"))
-assert data == {"alpha": {"empty": 0, "events": 10}}, data
+assert data == {"alpha": {"empty": 0, "events": 10, "metrics.daily": 7}}, data
 assert stat.S_IMODE(path.stat().st_mode) == 0o600, oct(stat.S_IMODE(path.stat().st_mode))
 print("PASS generated_manifest_behavior")
 PY
